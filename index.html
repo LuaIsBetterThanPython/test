@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Co-Op Basketball</title>
+<style>
+body { margin:0; overflow:hidden; background:#000; }
+#ui {
+  position:fixed; top:10px; left:10px;
+  color:white; font-family:sans-serif;
+  background:rgba(0,0,0,.6); padding:10px;
+}
+</style>
+</head>
+<body>
+<div id="ui">Co-Op Basketball | Move with WASD | Click to lock mouse</div>
+
+<script type="module">
+/* ----------------- THREE.JS SETUP ----------------- */
+import * as THREE from "https://unpkg.com/three@0.160.0/build/three.module.js";
+
+/* ----------------- FIREBASE SETUP ----------------- */
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-app.js";
+import { getDatabase, ref, set, onValue, remove } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-database.js";
+
+// Your Firebase config
+const firebaseConfig = {
+  apiKey: "AIzaSyBG1nsogxIyb4rBAMsNAszPD4U3jOgLBD4",
+  authDomain: "data-base-79a7e.firebaseapp.com",
+  databaseURL: "https://data-base-79a7e-default-rtdb.firebaseio.com",
+  projectId: "data-base-79a7e",
+  storageBucket: "data-base-79a7e.firebasestorage.app",
+  messagingSenderId: "44654807208",
+  appId: "1:44654807208:web:974b72b1b638b426069a9d"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+
+/* ----------------- SCENE ----------------- */
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x050505);
+
+const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 1000);
+const renderer = new THREE.WebGLRenderer({ antialias:true });
+renderer.setSize(innerWidth, innerHeight);
+document.body.appendChild(renderer.domElement);
+
+scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+const light = new THREE.DirectionalLight(0xffffff, 1);
+light.position.set(10,20,10);
+scene.add(light);
+
+const floor = new THREE.Mesh(
+  new THREE.PlaneGeometry(50,50),
+  new THREE.MeshPhongMaterial({ color:0xc87d0e })
+);
+floor.rotation.x = -Math.PI/2;
+scene.add(floor);
+
+/* ----------------- LOCAL PLAYER ----------------- */
+const player = new THREE.Group();
+const mat = new THREE.MeshPhongMaterial({ color:0x0088ff });
+
+const body = new THREE.Mesh(new THREE.BoxGeometry(0.8,1,0.4), mat);
+body.position.y = 1.3;
+player.add(body);
+
+const head = new THREE.Mesh(new THREE.BoxGeometry(0.4,0.4,0.4), mat);
+head.position.y = 2;
+player.add(head);
+
+scene.add(player);
+
+let yaw = 0;
+const keys = {};
+addEventListener("keydown", e => keys[e.code]=true);
+addEventListener("keyup", e => keys[e.code]=false);
+addEventListener("mousemove", e => {
+  if (document.pointerLockElement===document.body) yaw -= e.movementX*0.003;
+});
+addEventListener("click", ()=>document.body.requestPointerLock());
+
+camera.position.set(0,6,10);
+
+/* ----------------- REMOTE PLAYERS ----------------- */
+const myId = crypto.randomUUID();
+const remotePlayers = {};
+
+function createRemotePlayer() {
+  const g = new THREE.Group();
+  const m = new THREE.MeshPhongMaterial({ color:0x00ff88 });
+  const b = new THREE.Mesh(new THREE.BoxGeometry(0.8,1,0.4), m); b.position.y=1.3; g.add(b);
+  const h = new THREE.Mesh(new THREE.BoxGeometry(0.4,0.4,0.4), m); h.position.y=2; g.add(h);
+  scene.add(g);
+  return g;
+}
+
+// Listen for Firebase updates
+const playersRef = ref(db, 'players');
+onValue(playersRef, (snapshot) => {
+  const data = snapshot.val() || {};
+  for (let id in data) {
+    if (id === myId) continue;
+    if (!remotePlayers[id]) remotePlayers[id] = createRemotePlayer();
+    remotePlayers[id].position.set(data[id].x, data[id].y, data[id].z);
+    remotePlayers[id].rotation.y = data[id].yaw;
+  }
+  // Remove disconnected players
+  for (let id in remotePlayers) if (!data[id]) {
+    scene.remove(remotePlayers[id]);
+    delete remotePlayers[id];
+  }
+});
+
+/* ----------------- UPDATE FIREBASE ----------------- */
+function updateFirebase() {
+  set(ref(db, 'players/' + myId), {
+    x: player.position.x,
+    y: player.position.y,
+    z: player.position.z,
+    yaw
+  });
+}
+window.addEventListener("beforeunload", () => { remove(ref(db,'players/'+myId)); });
+
+/* ----------------- GAME LOOP ----------------- */
+function animate() {
+  requestAnimationFrame(animate);
+
+  if(keys.KeyW) player.position.z -= 0.15;
+  if(keys.KeyS) player.position.z += 0.15;
+  if(keys.KeyA) player.position.x -= 0.15;
+  if(keys.KeyD) player.position.x += 0.15;
+
+  player.rotation.y = yaw;
+  camera.position.lerp(player.position.clone().add(new THREE.Vector3(0,5,10).applyAxisAngle(new THREE.Vector3(0,1,0), yaw)),0.1);
+  camera.lookAt(player.position.clone().add(new THREE.Vector3(0,2,0)));
+
+  updateFirebase();
+  renderer.render(scene, camera);
+}
+animate();
+</script>
+</body>
+</html>
