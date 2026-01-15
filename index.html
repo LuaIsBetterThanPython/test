@@ -1,147 +1,956 @@
-<!DOCTYPE html>
+function createCourt() {
+            // Basketball court color (wood)
+            const ground = new THREE.Mesh(new THREE.PlaneGeometry(30, 60), new THREE.MeshPhongMaterial({ color: 0xC19A6B }));
+            ground.rotation.x = -Math.PI / 2;
+            ground.receiveShadow = true;
+            scene.add(ground);
+
+            // Center line
+            const line = new THREE.Mesh(new THREE.Pl<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>Co-Op Basketball</title>
-<style>
-body { margin:0; overflow:hidden; background:#000; }
-#ui {
-  position:fixed; top:10px; left:10px;
-  color:white; font-family:sans-serif;
-  background:rgba(0,0,0,.6); padding:10px;
-}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multiplayer Basketball Pro</title>
+    <style>
+        body { margin: 0; overflow: hidden; font-family: 'Segoe UI', sans-serif; background: #000; }
+        #ui { position: absolute; top: 20px; left: 20px; color: white; z-index: 10; pointer-events: none; }
+        .stat-box { background: rgba(0,0,0,0.8); padding: 12px; border-radius: 8px; margin-bottom: 8px; border: 1px solid #00ff88; min-width: 200px; pointer-events: auto; }
+        #power-bar-container { width: 100%; height: 8px; background: #222; margin-top: 8px; border-radius: 4px; overflow: hidden; }
+        #power-bar { width: 0%; height: 100%; background: #00ff88; transition: width 0.05s; }
+        #cursor {
+            position: absolute; top: 50%; left: 50%; width: 16px; height: 16px;
+            border: 2px solid rgba(0, 255, 136, 0.5); border-radius: 50%;
+            transform: translate(-50%, -50%); pointer-events: none;
+        }
+        #msg { position: absolute; bottom: 20px; width: 100%; text-align: center; color: white; pointer-events: none; font-size: 14px; opacity: 0.7; }
+        .score-popup { position: absolute; color: #00ff88; font-size: 48px; font-weight: bold; pointer-events: none; animation: scoreAnim 1s ease-out forwards; }
+        .broken-popup { position: absolute; color: #ff0000; font-size: 64px; font-weight: bold; pointer-events: none; animation: brokenAnim 1.5s ease-out forwards; text-shadow: 0 0 20px #ff0000; }
+        @keyframes scoreAnim { 
+            0% { transform: translate(-50%, 0) scale(0.5); opacity: 1; }
+            100% { transform: translate(-50%, -100px) scale(1.5); opacity: 0; }
+        }
+        @keyframes brokenAnim { 
+            0% { transform: translate(-50%, -50%) scale(0.5) rotate(-10deg); opacity: 1; }
+            50% { transform: translate(-50%, -50%) scale(1.2) rotate(10deg); opacity: 1; }
+            100% { transform: translate(-50%, -50%) scale(0.8) rotate(0deg); opacity: 0; }
+        }
+        #intermission {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.9); padding: 40px; border-radius: 16px;
+            border: 2px solid #00ff88; text-align: center; color: white;
+            display: none; z-index: 100;
+        }
+        #timer { font-size: 72px; font-weight: bold; color: #00ff88; margin: 20px 0; }
+        .blue-team { color: #0088ff; }
+        .red-team { color: #ff4444; }
+        
+        #name-modal {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.95); padding: 50px; border-radius: 16px;
+            border: 2px solid #00ff88; text-align: center; color: white; z-index: 200;
+        }
+        #name-input {
+            padding: 15px; font-size: 18px; border-radius: 8px; border: 2px solid #00ff88;
+            background: #222; color: white; width: 300px; margin: 20px 0;
+        }
+        #name-submit {
+            padding: 15px 40px; font-size: 18px; border-radius: 8px; border: none;
+            background: #00ff88; color: #000; cursor: pointer; font-weight: bold;
+        }
+        #name-submit:hover { background: #00dd77; }
+        
+        #chat-container {
+            position: absolute; bottom: 20px; right: 20px; width: 350px;
+            background: rgba(0,0,0,0.8); border-radius: 8px; border: 1px solid #00ff88;
+            pointer-events: auto; z-index: 10;
+        }
+        #chat-messages {
+            height: 200px; overflow-y: auto; padding: 10px; color: white; font-size: 14px;
+        }
+        .chat-msg { margin: 5px 0; }
+        .chat-name { font-weight: bold; color: #00ff88; }
+        #chat-input-container {
+            display: flex; padding: 10px; border-top: 1px solid #444;
+        }
+        #chat-input {
+            flex: 1; padding: 8px; border-radius: 4px; border: 1px solid #00ff88;
+            background: #222; color: white;
+        }
+        #chat-send {
+            margin-left: 8px; padding: 8px 15px; border-radius: 4px; border: none;
+            background: #00ff88; color: #000; cursor: pointer; font-weight: bold;
+        }
+    </style>
 </head>
 <body>
-<div id="ui">Co-Op Basketball | Move with WASD | Click to lock mouse</div>
 
-<script type="module">
-/* ----------------- THREE.JS SETUP ----------------- */
-import * as THREE from "https://unpkg.com/three@0.160.0/build/three.module.js";
+    <div id="cursor"></div>
+    
+    <div id="name-modal">
+        <h1>🏀 Basketball Pro</h1>
+        <p>Enter your display name to start playing!</p>
+        <input type="text" id="name-input" placeholder="Enter your name..." maxlength="15">
+        <br>
+        <button id="name-submit">JOIN GAME</button>
+    </div>
+    
+    <div id="ui">
+        <div class="stat-box">
+            <b>Team Score</b><br>
+            <span class="blue-team">🔵 Blue: <span id="blue-score">0</span></span><br>
+            <span class="red-team">🔴 Red: <span id="red-score">0</span></span><br>
+            <small id="status">Connecting...</small>
+        </div>
+        <div class="stat-box">
+            <b>Your Stats</b><br>
+            Points: <span id="my-score">0</span><br>
+            Team: <span id="my-team">-</span><br>
+            <small id="game-timer">Waiting...</small>
+        </div>
+        <div class="stat-box">
+            Power
+            <div id="power-bar-container"><div id="power-bar"></div></div>
+        </div>
+    </div>
+    
+    <div id="chat-container">
+        <div id="chat-messages"></div>
+        <div id="chat-input-container">
+            <input type="text" id="chat-input" placeholder="Type a message..." maxlength="100">
+            <button id="chat-send">Send</button>
+        </div>
+    </div>
+    
+    <div id="msg">WASD Move | E Dribble/Steal | SPACE Shoot | SHIFT Jump</div>
+    
+    <div id="intermission">
+        <h1>INTERMISSION</h1>
+        <div id="timer">10</div>
+        <div id="match-result"></div>
+        <p>Get ready for the next round!</p>
+    </div>
 
-/* ----------------- FIREBASE SETUP ----------------- */
-import { initializeApp } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-app.js";
-import { getDatabase, ref, set, onValue, remove } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-database.js";
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "cannon": "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js"
+            }
+        }
+    </script>
 
-// Your Firebase config
-const firebaseConfig = {
-  apiKey: "AIzaSyBG1nsogxIyb4rBAMsNAszPD4U3jOgLBD4",
-  authDomain: "data-base-79a7e.firebaseapp.com",
-  databaseURL: "https://data-base-79a7e-default-rtdb.firebaseio.com",
-  projectId: "data-base-79a7e",
-  storageBucket: "data-base-79a7e.firebasestorage.app",
-  messagingSenderId: "44654807208",
-  appId: "1:44654807208:web:974b72b1b638b426069a9d"
-};
+    <script type="module">
+        import * as THREE from 'three';
+        import * as CANNON from 'cannon';
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-app.js";
+        import { getDatabase, ref, set, onValue, update, onDisconnect, push } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-database.js";
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const db = getDatabase(app);
+        const firebaseConfig = {
+            apiKey: "AIzaSyBG1nsogxIyb4rBAMsNAszPD4U3jOgLBD4",
+            authDomain: "data-base-79a7e.firebaseapp.com",
+            databaseURL: "https://data-base-79a7e-default-rtdb.firebaseio.com",
+            projectId: "data-base-79a7e",
+            storageBucket: "data-base-79a7e.firebasestorage.app",
+            messagingSenderId: "44654807208",
+            appId: "1:44654807208:web:974b72b1b638b426069a9d"
+        };
 
-/* ----------------- SCENE ----------------- */
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x050505);
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+        const myId = crypto.randomUUID().split('-')[0];
+        const playerRef = ref(db, `players/${myId}`);
+        const ballRef = ref(db, 'ball');
+        const gameRef = ref(db, 'game');
+        const chatRef = ref(db, 'chat');
 
-const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 1000);
-const renderer = new THREE.WebGLRenderer({ antialias:true });
-renderer.setSize(innerWidth, innerHeight);
-document.body.appendChild(renderer.domElement);
+        let scene, camera, renderer, world;
+        let ballMesh, ballBody, playerGroup, playerBody;
+        let isCharging = false, power = 0, myScore = 0;
+        let ballState = { x: 0, y: 5, z: 0, holder: null };
+        let gameState = { state: 'intermission', blueScore: 0, redScore: 0, timer: 10, roundEnd: 0 };
+        let remotePlayers = {};
+        let yaw = 0, pitch = 0, prevTime = performance.now();
+        let lastShot = 0, shotCooldown = 500;
+        let lastSyncTime = 0;
+        let myTeam = 'blue';
+        let dribbling = false, dribblingEnd = 0;
+        let lastAction = 0, actionCooldown = 2000;
+        let myName = '';
+        let gameStarted = false;
+        let walkCycle = 0;
+        const keys = {};
 
-scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-const light = new THREE.DirectionalLight(0xffffff, 1);
-light.position.set(10,20,10);
-scene.add(light);
+        // Name modal setup
+        document.getElementById('name-submit').addEventListener('click', startGame);
+        document.getElementById('name-input').addEventListener('keypress', e => {
+            if (e.key === 'Enter') startGame();
+        });
 
-const floor = new THREE.Mesh(
-  new THREE.PlaneGeometry(50,50),
-  new THREE.MeshPhongMaterial({ color:0xc87d0e })
-);
-floor.rotation.x = -Math.PI/2;
-scene.add(floor);
+        function startGame() {
+            const nameInput = document.getElementById('name-input').value.trim();
+            if (!nameInput) {
+                alert('Please enter a name!');
+                return;
+            }
+            myName = nameInput;
+            document.getElementById('name-modal').style.display = 'none';
+            gameStarted = true;
+            init();
+        }
 
-/* ----------------- LOCAL PLAYER ----------------- */
-const player = new THREE.Group();
-const mat = new THREE.MeshPhongMaterial({ color:0x0088ff });
+        // Chat setup
+        document.getElementById('chat-send').addEventListener('click', sendMessage);
+        document.getElementById('chat-input').addEventListener('keypress', e => {
+            if (e.key === 'Enter') sendMessage();
+        });
 
-const body = new THREE.Mesh(new THREE.BoxGeometry(0.8,1,0.4), mat);
-body.position.y = 1.3;
-player.add(body);
+        function sendMessage() {
+            const input = document.getElementById('chat-input');
+            const msg = input.value.trim();
+            if (!msg) return;
+            
+            push(chatRef, {
+                name: myName,
+                message: msg,
+                timestamp: Date.now(),
+                team: myTeam
+            });
+            
+            input.value = '';
+        }
 
-const head = new THREE.Mesh(new THREE.BoxGeometry(0.4,0.4,0.4), mat);
-head.position.y = 2;
-player.add(head);
+        function setupChat() {
+            onValue(chatRef, snap => {
+                const messages = snap.val() || {};
+                const chatDiv = document.getElementById('chat-messages');
+                const shouldScroll = chatDiv.scrollHeight - chatDiv.scrollTop <= chatDiv.clientHeight + 50;
+                
+                // Get last 50 messages
+                const msgArray = Object.values(messages).sort((a, b) => a.timestamp - b.timestamp).slice(-50);
+                
+                chatDiv.innerHTML = '';
+                msgArray.forEach(msg => {
+                    const div = document.createElement('div');
+                    div.className = 'chat-msg';
+                    const nameColor = msg.team === 'blue' ? '#0088ff' : '#ff4444';
+                    div.innerHTML = `<span class="chat-name" style="color: ${nameColor}">${msg.name}:</span> ${msg.message}`;
+                    chatDiv.appendChild(div);
+                });
+                
+                if (shouldScroll) {
+                    chatDiv.scrollTop = chatDiv.scrollHeight;
+                }
+            });
+        }
 
-scene.add(player);
+        init;
 
-let yaw = 0;
-const keys = {};
-addEventListener("keydown", e => keys[e.code]=true);
-addEventListener("keyup", e => keys[e.code]=false);
-addEventListener("mousemove", e => {
-  if (document.pointerLockElement===document.body) yaw -= e.movementX*0.003;
-});
-addEventListener("click", ()=>document.body.requestPointerLock());
+        function init() {
+            if (!gameStarted) return;
+            
+            setupChat();
+            world = new CANNON.World();
+            world.gravity.set(0, -20, 0);
 
-camera.position.set(0,6,10);
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x111111);
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            document.body.appendChild(renderer.domElement);
 
-/* ----------------- REMOTE PLAYERS ----------------- */
-const myId = crypto.randomUUID();
-const remotePlayers = {};
+            scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+            const sun = new THREE.DirectionalLight(0xffffff, 1);
+            sun.position.set(10, 20, 10);
+            sun.castShadow = true;
+            scene.add(sun);
 
-function createRemotePlayer() {
-  const g = new THREE.Group();
-  const m = new THREE.MeshPhongMaterial({ color:0x00ff88 });
-  const b = new THREE.Mesh(new THREE.BoxGeometry(0.8,1,0.4), m); b.position.y=1.3; g.add(b);
-  const h = new THREE.Mesh(new THREE.BoxGeometry(0.4,0.4,0.4), m); h.position.y=2; g.add(h);
-  scene.add(g);
-  return g;
-}
+            createCourt();
+            createHoop(24, 0x0088ff);
+            createHoop(-24, 0xff4444);
+            setupPlayer();
+            setupBall();
+           
+            window.addEventListener('keydown', e => {
+                keys[e.code] = true;
+                
+                // Don't process game keys if typing in chat
+                if (document.activeElement.id === 'chat-input') return;
+                
+                if (e.code === 'KeyE' && gameState.state === 'playing') {
+                    const now = performance.now();
+                    if (now - lastAction > actionCooldown) {
+                        if (ballState.holder === myId) {
+                            activateDribble();
+                        } else {
+                            attemptSteal();
+                        }
+                        lastAction = now;
+                    }
+                }
+            });
+            window.addEventListener('keyup', e => keys[e.code] = false);
+           
+            document.addEventListener('mousedown', () => {
+                // Don't lock pointer if clicking on chat
+                if (document.activeElement.id === 'chat-input') return;
+                
+                if (document.pointerLockElement !== document.body) {
+                    const p = document.body.requestPointerLock();
+                    if(p && p.catch) p.catch(()=>{});
+                } else if (ballState.holder === myId && gameState.state === 'playing') {
+                    isCharging = true;
+                }
+            });
 
-// Listen for Firebase updates
-const playersRef = ref(db, 'players');
-onValue(playersRef, (snapshot) => {
-  const data = snapshot.val() || {};
-  for (let id in data) {
-    if (id === myId) continue;
-    if (!remotePlayers[id]) remotePlayers[id] = createRemotePlayer();
-    remotePlayers[id].position.set(data[id].x, data[id].y, data[id].z);
-    remotePlayers[id].rotation.y = data[id].yaw;
-  }
-  // Remove disconnected players
-  for (let id in remotePlayers) if (!data[id]) {
-    scene.remove(remotePlayers[id]);
-    delete remotePlayers[id];
-  }
-});
+            document.addEventListener('mouseup', () => { if(isCharging) releaseBall(); });
 
-/* ----------------- UPDATE FIREBASE ----------------- */
-function updateFirebase() {
-  set(ref(db, 'players/' + myId), {
-    x: player.position.x,
-    y: player.position.y,
-    z: player.position.z,
-    yaw
-  });
-}
-window.addEventListener("beforeunload", () => { remove(ref(db,'players/'+myId)); });
+            document.addEventListener('mousemove', e => {
+                if (document.pointerLockElement === document.body) {
+                    yaw -= e.movementX * 0.002;
+                    pitch = Math.max(-0.8, Math.min(0.8, pitch - e.movementY * 0.002));
+                }
+            });
 
-/* ----------------- GAME LOOP ----------------- */
-function animate() {
-  requestAnimationFrame(animate);
+            setupNetwork();
+            animate();
+        }
 
-  if(keys.KeyW) player.position.z -= 0.15;
-  if(keys.KeyS) player.position.z += 0.15;
-  if(keys.KeyA) player.position.x -= 0.15;
-  if(keys.KeyD) player.position.x += 0.15;
+        function setupPlayer() {
+            playerGroup = new THREE.Group();
+            
+            // Body (torso)
+            const torso = new THREE.Mesh(
+                new THREE.BoxGeometry(0.8, 1, 0.5),
+                new THREE.MeshPhongMaterial({ color: 0x0088ff })
+            );
+            torso.position.y = 1;
+            torso.castShadow = true;
+            torso.name = 'torso';
+            
+            // Head
+            const head = new THREE.Mesh(
+                new THREE.SphereGeometry(0.35, 16, 16),
+                new THREE.MeshPhongMaterial({ color: 0xffdbac })
+            );
+            head.position.y = 1.85;
+            head.castShadow = true;
+            head.name = 'head';
+            
+            // Legs
+            const legGeo = new THREE.BoxGeometry(0.3, 0.8, 0.3);
+            const legMat = new THREE.MeshPhongMaterial({ color: 0x333333 });
+            
+            const leftLeg = new THREE.Mesh(legGeo, legMat);
+            leftLeg.position.set(-0.25, 0.4, 0);
+            leftLeg.castShadow = true;
+            leftLeg.name = 'leftLeg';
+            
+            const rightLeg = new THREE.Mesh(legGeo, legMat);
+            rightLeg.position.set(0.25, 0.4, 0);
+            rightLeg.castShadow = true;
+            rightLeg.name = 'rightLeg';
+            
+            // Arms
+            const armGeo = new THREE.BoxGeometry(0.25, 0.8, 0.25);
+            const armMat = new THREE.MeshPhongMaterial({ color: 0xffdbac });
+            
+            const leftArm = new THREE.Mesh(armGeo, armMat);
+            leftArm.position.set(-0.65, 1, 0);
+            leftArm.castShadow = true;
+            leftArm.name = 'leftArm';
+            
+            const rightArm = new THREE.Mesh(armGeo, armMat);
+            rightArm.position.set(0.65, 1, 0);
+            rightArm.castShadow = true;
+            rightArm.name = 'rightArm';
+            
+            torso.name = 'playerBody';
+            playerGroup.add(torso);
+            playerGroup.add(head);
+            playerGroup.add(leftLeg);
+            playerGroup.add(rightLeg);
+            playerGroup.add(leftArm);
+            playerGroup.add(rightArm);
+            scene.add(playerGroup);
 
-  player.rotation.y = yaw;
-  camera.position.lerp(player.position.clone().add(new THREE.Vector3(0,5,10).applyAxisAngle(new THREE.Vector3(0,1,0), yaw)),0.1);
-  camera.lookAt(player.position.clone().add(new THREE.Vector3(0,2,0)));
+            playerBody = new CANNON.Body({
+                mass: 5,
+                shape: new CANNON.Sphere(0.6),
+                position: new CANNON.Vec3(0, 0.6, 15),
+                fixedRotation: true
+            });
+            world.addBody(playerBody);
+        }
+        
+        function animatePlayer(isMoving) {
+            const leftLeg = playerGroup.getObjectByName('leftLeg');
+            const rightLeg = playerGroup.getObjectByName('rightLeg');
+            const leftArm = playerGroup.getObjectByName('leftArm');
+            const rightArm = playerGroup.getObjectByName('rightArm');
+            const head = playerGroup.getObjectByName('head');
+            
+            if (isMoving) {
+                walkCycle += 0.15;
+                const swing = Math.sin(walkCycle) * 0.3;
+                
+                leftLeg.rotation.x = swing;
+                rightLeg.rotation.x = -swing;
+                leftArm.rotation.x = -swing;
+                rightArm.rotation.x = swing;
+                head.rotation.y = Math.sin(walkCycle * 0.5) * 0.1;
+            } else {
+                // Return to neutral position
+                leftLeg.rotation.x *= 0.9;
+                rightLeg.rotation.x *= 0.9;
+                leftArm.rotation.x *= 0.9;
+                rightArm.rotation.x *= 0.9;
+                head.rotation.y *= 0.9;
+            }
+        }
 
-  updateFirebase();
-  renderer.render(scene, camera);
-}
-animate();
-</script>
+        function setupBall() {
+            ballMesh = new THREE.Mesh(new THREE.SphereGeometry(0.35, 32, 32), new THREE.MeshPhongMaterial({ color: 0xff6600 }));
+            ballMesh.castShadow = true;
+            scene.add(ballMesh);
+
+            ballBody = new CANNON.Body({ mass: 1, shape: new CANNON.Sphere(0.35) });
+            ballBody.material = new CANNON.Material({ restitution: 0.8 });
+            world.addBody(ballBody);
+        }
+
+        function createCourt() {
+            // Basketball court color (wood)
+            const ground = new THREE.Mesh(new THREE.PlaneGeometry(30, 60), new THREE.MeshPhongMaterial({ color: 0xC19A6B }));
+            ground.rotation.x = -Math.PI / 2;
+            ground.receiveShadow = true;
+            scene.add(ground);
+
+            // Center line
+            const line = new THREE.Mesh(new THREE.PlaneGeometry(30, 0.2), new THREE.MeshPhongMaterial({ color: 0xffffff }));
+            line.rotation.x = -Math.PI / 2;
+            line.position.y = 0.01;
+            scene.add(line);
+
+            const groundBody = new CANNON.Body({ mass: 0, shape: new CANNON.Plane() });
+            groundBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
+            world.addBody(groundBody);
+
+            // Court walls - taller
+            createWall(0, 30, 30, 0.5, true); // Front
+            createWall(0, -30, 30, 0.5, true); // Back
+            createWall(15, 0, 0.5, 60, false); // Right
+            createWall(-15, 0, 0.5, 60, false); // Left
+            
+            // Ceiling/Roof
+            const ceiling = new THREE.Mesh(
+                new THREE.PlaneGeometry(30, 60),
+                new THREE.MeshPhongMaterial({ color: 0x333333, transparent: true, opacity: 0.3, side: THREE.DoubleSide })
+            );
+            ceiling.rotation.x = Math.PI / 2;
+            ceiling.position.y = 15;
+            scene.add(ceiling);
+            
+            const ceilingBody = new CANNON.Body({ mass: 0, shape: new CANNON.Plane() });
+            ceilingBody.quaternion.setFromEuler(Math.PI / 2, 0, 0);
+            ceilingBody.position.y = 15;
+            world.addBody(ceilingBody);
+        }
+
+        function createWall(x, z, width, depth, isHorizontal) {
+            const wallMesh = new THREE.Mesh(
+                new THREE.BoxGeometry(width, 15, depth),
+                new THREE.MeshPhongMaterial({ color: 0x444444 })
+            );
+            wallMesh.position.set(x, 7.5, z);
+            wallMesh.receiveShadow = true;
+            scene.add(wallMesh);
+
+            const wallBody = new CANNON.Body({
+                mass: 0,
+                shape: new CANNON.Box(new CANNON.Vec3(width/2, 7.5, depth/2))
+            });
+            wallBody.position.set(x, 7.5, z);
+            world.addBody(wallBody);
+        }
+
+        function createHoop(z, color) {
+            // z > 0 means blue team side (positive z), z < 0 means red team side (negative z)
+            const rim = new THREE.Mesh(new THREE.TorusGeometry(0.7, 0.06), new THREE.MeshPhongMaterial({color: color}));
+            rim.rotation.x = Math.PI/2; // Face up so ball can go through
+            rim.position.set(0, 7, z > 0 ? 28 : -28);
+            scene.add(rim);
+
+            const board = new THREE.Mesh(new THREE.BoxGeometry(4, 3, 0.2), new THREE.MeshPhongMaterial({color: 0xffffff}));
+            board.position.set(0, 8.5, z > 0 ? 29 : -29);
+            scene.add(board);
+
+            const bb = new CANNON.Body({ mass: 0, shape: new CANNON.Box(new CANNON.Vec3(2, 1.5, 0.1)) });
+            bb.position.set(0, 8.5, z > 0 ? 29 : -29);
+            world.addBody(bb);
+        }
+
+        function setupNetwork() {
+            onDisconnect(playerRef).remove();
+            
+            // Monitor player count and clear chat when server is empty
+            onValue(ref(db, 'players'), snap => {
+                const players = snap.val() || {};
+                const playerCount = Object.keys(players).length;
+                
+                // If server is empty, clear chat
+                if (playerCount === 0) {
+                    set(chatRef, null);
+                }
+            });
+            
+            onValue(ref(db, 'players'), snap => {
+                const players = snap.val() || {};
+                const teams = { blue: 0, red: 0 };
+                for (let id in players) {
+                    if (players[id].team) teams[players[id].team]++;
+                }
+                myTeam = teams.blue <= teams.red ? 'blue' : 'red';
+                document.getElementById('my-team').innerText = myTeam === 'blue' ? '🔵 Blue' : '🔴 Red';
+                document.getElementById('my-team').className = myTeam + '-team';
+                
+                const bodyMesh = playerGroup.getObjectByName('playerBody');
+                bodyMesh.material.color.setHex(myTeam === 'blue' ? 0x0088ff : 0xff4444);
+                
+                // Only set initial position, don't reset ball
+                playerBody.position.set(Math.random() * 8 - 4, 0.6, myTeam === 'blue' ? 20 : -20);
+            }, { onlyOnce: true });
+            
+            onValue(ref(db, 'players'), snap => {
+                const data = snap.val() || {};
+                
+                for (let id in data) {
+                    if (id === myId) continue;
+                    
+                    if (!remotePlayers[id]) {
+                        const group = new THREE.Group();
+                        
+                        // Create human-like character
+                        const torso = new THREE.Mesh(
+                            new THREE.BoxGeometry(0.8, 1, 0.5),
+                            new THREE.MeshPhongMaterial({ color: data[id].team === 'blue' ? 0x0088ff : 0xff4444 })
+                        );
+                        torso.position.y = 1;
+                        torso.castShadow = true;
+                        
+                        const head = new THREE.Mesh(
+                            new THREE.SphereGeometry(0.35, 16, 16),
+                            new THREE.MeshPhongMaterial({ color: 0xffdbac })
+                        );
+                        head.position.y = 1.85;
+                        head.castShadow = true;
+                        
+                        const legGeo = new THREE.BoxGeometry(0.3, 0.8, 0.3);
+                        const legMat = new THREE.MeshPhongMaterial({ color: 0x333333 });
+                        const leftLeg = new THREE.Mesh(legGeo, legMat);
+                        leftLeg.position.set(-0.25, 0.4, 0);
+                        leftLeg.castShadow = true;
+                        const rightLeg = new THREE.Mesh(legGeo, legMat);
+                        rightLeg.position.set(0.25, 0.4, 0);
+                        rightLeg.castShadow = true;
+                        
+                        const armGeo = new THREE.BoxGeometry(0.25, 0.8, 0.25);
+                        const armMat = new THREE.MeshPhongMaterial({ color: 0xffdbac });
+                        const leftArm = new THREE.Mesh(armGeo, armMat);
+                        leftArm.position.set(-0.65, 1, 0);
+                        leftArm.castShadow = true;
+                        const rightArm = new THREE.Mesh(armGeo, armMat);
+                        rightArm.position.set(0.65, 1, 0);
+                        rightArm.castShadow = true;
+                        
+                        group.add(torso);
+                        group.add(head);
+                        group.add(leftLeg);
+                        group.add(rightLeg);
+                        group.add(leftArm);
+                        group.add(rightArm);
+                        
+                        // Add ball visual for remote players
+                        const remoteBall = new THREE.Mesh(
+                            new THREE.SphereGeometry(0.35, 16, 16),
+                            new THREE.MeshPhongMaterial({ color: 0xff6600 })
+                        );
+                        remoteBall.position.set(0.6, 1.2, -0.8);
+                        remoteBall.visible = false;
+                        remoteBall.name = 'remoteBall';
+                        group.add(remoteBall);
+                        
+                        // Add name tag
+                        const canvas = document.createElement('canvas');
+                        const ctx = canvas.getContext('2d');
+                        canvas.width = 256;
+                        canvas.height = 64;
+                        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                        ctx.fillRect(0, 0, 256, 64);
+                        ctx.fillStyle = '#00ff88';
+                        ctx.font = 'bold 32px Arial';
+                        ctx.textAlign = 'center';
+                        ctx.fillText(data[id].name || 'Player', 128, 42);
+                        
+                        const texture = new THREE.CanvasTexture(canvas);
+                        const nameMaterial = new THREE.SpriteMaterial({ map: texture });
+                        const nameSprite = new THREE.Sprite(nameMaterial);
+                        nameSprite.scale.set(2, 0.5, 1);
+                        nameSprite.position.y = 2.5;
+                        group.add(nameSprite);
+                        
+                        remotePlayers[id] = { group, torso, ball: remoteBall };
+                        scene.add(group);
+                    }
+                    
+                    remotePlayers[id].group.position.set(data[id].x, data[id].y, data[id].z);
+                    remotePlayers[id].group.rotation.y = data[id].ry || 0;
+                    
+                    // Show/hide ball for remote players
+                    if (ballState.holder === id) {
+                        remotePlayers[id].ball.visible = true;
+                    } else {
+                        remotePlayers[id].ball.visible = false;
+                    }
+                    
+                    if (data[id].dribbling) {
+                        remotePlayers[id].torso.material.color.setHex(0xffd700);
+                    } else {
+                        remotePlayers[id].torso.material.color.setHex(data[id].team === 'blue' ? 0x0088ff : 0xff4444);
+                    }
+                }
+                
+                for (let id in remotePlayers) {
+                    if (!data[id]) {
+                        scene.remove(remotePlayers[id].group);
+                        delete remotePlayers[id];
+                    }
+                }
+            });
+
+            onValue(ballRef, snap => {
+                const data = snap.val();
+                if (data) {
+                    ballState = data;
+                    if (data.holder !== myId) {
+                        ballBody.position.set(data.x, data.y, data.z);
+                        ballBody.velocity.set(data.vx || 0, data.vy || 0, data.vz || 0);
+                        ballMesh.position.set(data.x, data.y, data.z);
+                    }
+                    
+                    // Hide ball if someone else has it
+                    if (data.holder && data.holder !== myId) {
+                        ballMesh.visible = false;
+                    } else {
+                        ballMesh.visible = true;
+                    }
+                }
+            });
+
+            onValue(gameRef, snap => {
+                const data = snap.val();
+                if (data) {
+                    gameState = data;
+                    document.getElementById('blue-score').innerText = data.blueScore;
+                    document.getElementById('red-score').innerText = data.redScore;
+                    
+                    if (data.state === 'intermission') {
+                        document.getElementById('intermission').style.display = 'block';
+                    } else {
+                        document.getElementById('intermission').style.display = 'none';
+                    }
+                } else {
+                    set(gameRef, {
+                        state: 'intermission',
+                        blueScore: 0,
+                        redScore: 0,
+                        timer: 10,
+                        roundEnd: Date.now() + 10000
+                    });
+                }
+            });
+            
+            document.getElementById('status').innerText = myName;
+        }
+
+        function activateDribble() {
+            dribbling = true;
+            dribblingEnd = performance.now() + 2000;
+        }
+
+        function attemptSteal() {
+            let closestWithBall = null;
+            let minDist = Infinity;
+            
+            for (let id in remotePlayers) {
+                const dist = playerBody.position.distanceTo(remotePlayers[id].group.position);
+                if (ballState.holder === id && dist < 2.5 && dist < minDist) {
+                    minDist = dist;
+                    closestWithBall = id;
+                }
+            }
+            
+            if (closestWithBall) {
+                onValue(ref(db, `players/${closestWithBall}`), snap => {
+                    const data = snap.val();
+                    if (data) {
+                        if (data.team === myTeam) return;
+                        
+                        if (data.dribbling) {
+                            showAnkleBroken();
+                            const dir = new THREE.Vector3()
+                                .subVectors(playerBody.position, remotePlayers[closestWithBall].group.position)
+                                .normalize();
+                            playerBody.velocity.x = dir.x * 20;
+                            playerBody.velocity.z = dir.z * 20;
+                        } else {
+                            update(ballRef, { holder: myId });
+                        }
+                    }
+                }, { onlyOnce: true });
+            }
+        }
+
+        function resetPositions() {
+            // Reset player position
+            const spawnZ = myTeam === 'blue' ? 20 : -20;
+            playerBody.position.set(Math.random() * 8 - 4, 0.6, spawnZ);
+            playerBody.velocity.set(0, 0, 0);
+            playerGroup.position.copy(playerBody.position);
+            
+            // Reset ball to center
+            ballBody.position.set(0, 5, 0);
+            ballBody.velocity.set(0, 0, 0);
+            ballMesh.position.set(0, 5, 0);
+            
+            // Update Firebase
+            update(ballRef, { 
+                x: 0, 
+                y: 5, 
+                z: 0, 
+                vx: 0, 
+                vy: 0, 
+                vz: 0, 
+                holder: null 
+            });
+        }
+
+        function giveBallToOpponent(scoringTeam) {
+            onValue(ref(db, 'players'), snap => {
+                const players = snap.val() || {};
+                const opponentTeam = scoringTeam === 'blue' ? 'red' : 'blue';
+                const opponents = [];
+                
+                for (let id in players) {
+                    if (players[id].team === opponentTeam) {
+                        opponents.push(id);
+                    }
+                }
+                
+                if (opponents.length > 0) {
+                    const randomOpponent = opponents[Math.floor(Math.random() * opponents.length)];
+                    update(ballRef, { holder: randomOpponent });
+                }
+            }, { onlyOnce: true });
+        }
+
+        function releaseBall() {
+            const now = performance.now();
+            if (now - lastShot < shotCooldown) return;
+            
+            isCharging = false;
+            lastShot = now;
+            
+            const dir = new THREE.Vector3(0, 0.5, -1)
+                .applyAxisAngle(new THREE.Vector3(1,0,0), pitch)
+                .applyAxisAngle(new THREE.Vector3(0,1,0), yaw);
+            
+            const force = 12 + (power * 0.25);
+            ballBody.velocity.set(dir.x * force, dir.y * force * 1.5, dir.z * force);
+            
+            update(ballRef, { 
+                holder: null, 
+                vx: ballBody.velocity.x, 
+                vy: ballBody.velocity.y, 
+                vz: ballBody.velocity.z 
+            });
+            
+            power = 0;
+            document.getElementById('power-bar').style.width = "0%";
+        }
+        
+        function showScorePopup(points) {
+            const popup = document.createElement('div');
+            popup.className = 'score-popup';
+            popup.innerText = '+' + points;
+            popup.style.left = '50%';
+            popup.style.top = '40%';
+            document.body.appendChild(popup);
+            setTimeout(() => popup.remove(), 1000);
+        }
+
+        function showAnkleBroken() {
+            const popup = document.createElement('div');
+            popup.className = 'broken-popup';
+            popup.innerText = 'ANKLE BROKEN';
+            popup.style.left = '50%';
+            popup.style.top = '50%';
+            document.body.appendChild(popup);
+            setTimeout(() => popup.remove(), 1500);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const time = performance.now();
+            world.step(1/60);
+
+            if (dribbling && time > dribblingEnd) {
+                dribbling = false;
+            }
+            
+            const bodyMesh = playerGroup.getObjectByName('playerBody');
+            if (dribbling) {
+                bodyMesh.material.color.setHex(0xffd700);
+            } else {
+                bodyMesh.material.color.setHex(myTeam === 'blue' ? 0x0088ff : 0xff4444);
+            }
+
+            if (gameState.state === 'intermission') {
+                const remaining = Math.max(0, Math.ceil((gameState.roundEnd - Date.now()) / 1000));
+                document.getElementById('timer').innerText = remaining;
+                document.getElementById('game-timer').innerText = 'Intermission: ' + remaining + 's';
+                
+                if (remaining === 0) {
+                    update(gameRef, { 
+                        state: 'playing', 
+                        roundEnd: Date.now() + 120000,
+                        timer: 120
+                    });
+                    resetPositions();
+                }
+            } else if (gameState.state === 'playing') {
+                const remaining = Math.max(0, Math.ceil((gameState.roundEnd - Date.now()) / 1000));
+                const mins = Math.floor(remaining / 60);
+                const secs = remaining % 60;
+                document.getElementById('game-timer').innerText = `Time: ${mins}:${secs.toString().padStart(2, '0')}`;
+                
+                if (remaining === 0) {
+                    const winner = gameState.blueScore > gameState.redScore ? 'Blue' : 
+                                   gameState.redScore > gameState.blueScore ? 'Red' : 'Tie';
+                    document.getElementById('match-result').innerHTML = 
+                        `<h2>${winner === 'Tie' ? "It's a Tie!" : winner + ' Team Wins!'}</h2>
+                         <p>Blue: ${gameState.blueScore} - Red: ${gameState.redScore}</p>`;
+                    
+                    update(gameRef, {
+                        state: 'intermission',
+                        blueScore: 0,
+                        redScore: 0,
+                        roundEnd: Date.now() + 10000,
+                        timer: 10
+                    });
+                }
+                
+                const move = new THREE.Vector3();
+                if (keys.KeyW) move.z -= 1; if (keys.KeyS) move.z += 1;
+                if (keys.KeyA) move.x -= 1; if (keys.KeyD) move.x += 1;
+                move.normalize().applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
+               
+                playerBody.velocity.x = move.x * 14;
+                playerBody.velocity.z = move.z * 14;
+                if (keys.ShiftLeft && Math.abs(playerBody.velocity.y) < 0.1) playerBody.velocity.y = 12;
+
+                playerGroup.position.copy(playerBody.position);
+                playerGroup.rotation.y = yaw;
+
+                if (ballState.holder === myId) {
+                    const handOffset = new THREE.Vector3(0.6, 1.2, -0.8).applyQuaternion(playerGroup.quaternion);
+                    ballBody.position.copy(playerGroup.position.clone().add(handOffset));
+                    ballBody.velocity.set(0,0,0);
+                    ballMesh.position.copy(ballBody.position);
+                    ballMesh.visible = true;
+                    
+                    if (isCharging) {
+                        power = Math.min(100, power + 2);
+                        document.getElementById('power-bar').style.width = power + "%";
+                    }
+                } else if (!ballState.holder) {
+                    if (playerBody.position.distanceTo(ballBody.position) < 1.8) {
+                        update(ballRef, { holder: myId });
+                    }
+                    ballMesh.visible = true;
+                } else {
+                    ballMesh.visible = false;
+                }
+
+                ballMesh.position.copy(ballBody.position);
+                ballMesh.quaternion.copy(ballBody.quaternion);
+               
+                if (time - lastSyncTime > 50) {
+                    set(playerRef, { 
+                        x: playerBody.position.x, 
+                        y: playerBody.position.y, 
+                        z: playerBody.position.z, 
+                        ry: yaw,
+                        team: myTeam,
+                        dribbling: dribbling,
+                        name: myName,
+                        timestamp: Date.now()
+                    });
+                    lastSyncTime = time;
+                }
+               
+                if (ballState.holder === myId || ballBody.velocity.length() > 0.3) {
+                    update(ballRef, {
+                        x: ballBody.position.x, y: ballBody.position.y, z: ballBody.position.z,
+                        vx: ballBody.velocity.x, vy: ballBody.velocity.y, vz: ballBody.velocity.z
+                    });
+                }
+
+                const distToBlueHoop = Math.sqrt(Math.pow(ballBody.position.x, 2) + Math.pow(ballBody.position.z - 23, 2));
+                const distToRedHoop = Math.sqrt(Math.pow(ballBody.position.x, 2) + Math.pow(ballBody.position.z + 23, 2));
+                
+                if (ballBody.position.y > 6.5 && ballBody.position.y < 7.5 && ballBody.velocity.y < 0 && !ballState.scored) {
+                    if (distToBlueHoop < 0.7 && myTeam === 'red') {
+                        myScore += 2;
+                        document.getElementById('my-score').innerText = myScore;
+                        showScorePopup(2);
+                        update(gameRef, { redScore: gameState.redScore + 2 });
+                        update(ballRef, { scored: true });
+                        setTimeout(() => {
+                            update(ballRef, { scored: false });
+                            resetPositions();
+                            giveBallToOpponent('red');
+                        }, 1500);
+                    } else if (distToRedHoop < 0.7 && myTeam === 'blue') {
+                        myScore += 2;
+                        document.getElementById('my-score').innerText = myScore;
+                        showScorePopup(2);
+                        update(gameRef, { blueScore: gameState.blueScore + 2 });
+                        update(ballRef, { scored: true });
+                        setTimeout(() => {
+                            update(ballRef, { scored: false });
+                            resetPositions();
+                            giveBallToOpponent('blue');
+                        }, 1500);
+                    }
+                }
+            }
+
+            const camOffset = new THREE.Vector3(0, 4, 8).applyAxisAngle(new THREE.Vector3(1,0,0), pitch).applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
+            camera.position.lerp(playerGroup.position.clone().add(camOffset), 0.1);
+            camera.lookAt(playerGroup.position.clone().add(new THREE.Vector3(0, 1.5, 0)));
+
+            renderer.render(scene, camera);
+            prevTime = time;
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
 </body>
 </html>
